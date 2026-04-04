@@ -1,10 +1,27 @@
 project('audio_visualizer_gtk', 'c')
 
-dep = [dependency('gtk4'), dependency('libadwaita-1')]
+cc = meson.get_compiler('c')
+
+dep = [
+  dependency('gtk4'),
+  dependency('libadwaita-1'),
+  dependency('glfw3'),
+  dependency('opengl'),
+  dependency('portaudio-2.0'),
+  dependency('sndfile'),
+  dependency('opus'),
+  dependency('flac'),
+  dependency('ogg'),
+  dependency('libmpg123'),
+  dependency('vorbis'),
+  dependency('vorbisenc'),
+  cc.find_library('mp3lame')
+  ]
 
 src = files(
   'main.c',
-  'ui.c'
+  'ui.c',
+  'audio.c'
   )
 
 executable('audio_visualizer', src, dependencies: dep)
