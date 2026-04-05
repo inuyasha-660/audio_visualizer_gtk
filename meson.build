@@ -5,10 +5,9 @@ cc = meson.get_compiler('c')
 dep = [
   dependency('gtk4'),
   dependency('libadwaita-1'),
-  dependency('glfw3'),
-  dependency('opengl'),
   dependency('portaudio-2.0'),
   dependency('sndfile'),
+  dependency('fftw3f'),
   dependency('opus'),
   dependency('flac'),
   dependency('ogg'),

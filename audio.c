@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BUFFER_LEN 1600
-
 float buffer_draw[BUFFER_LEN * 2];
 
 PlayData *playData = {0};

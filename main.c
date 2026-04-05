@@ -25,5 +25,7 @@ int main(int argc, char *argv[])
     audio_clean();
     Pa_Terminate();
     free(playData->audiopath);
+    fft_clean();
+
     return status;
 }

@@ -1,6 +1,8 @@
 #include <sndfile.h>
 #include <portaudio.h>
 
+#define BUFFER_LEN 1024
+
 #define DEFAULT_VOL 35.0f
 
 typedef enum {

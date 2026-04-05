@@ -1,16 +1,13 @@
 #include "ui.h"
 #include "audio.h"
-#include "glib.h"
-#include "glibconfig.h"
-#include "gtk/gtkshortcut.h"
-#include <GL/gl.h>
-#include <GLFW/glfw3.h>
 #include <adwaita.h>
+#include <fftw3.h>
 #include <gtk/gtk.h>
 #include <portaudio.h>
 #include <stdio.h>
 
 extern PlayData *playData;
+extern float     buffer_draw[BUFFER_LEN * 2];
 
 static const char *TITLE_HOME = "audio_visualizer";
 static int         Height = 950;
@@ -18,6 +15,164 @@ static int         Width = 1550;
 
 static GtkWidget *Btn_play;
 static GtkWidget *Spin_volume;
+
+typedef struct {
+    int x;
+    int y;
+} Vector2;
+
+/* 自定义控件 DrawForm */
+typedef struct _DrawForm {
+    GtkWidget parent_instance;
+} _DrawForm;
+
+G_DECLARE_FINAL_TYPE(DrawForm, draw_form, DRAWFORM, WIDGET, GtkWidget)
+G_DEFINE_TYPE(DrawForm, draw_form, GTK_TYPE_WIDGET)
+
+static void draw_form_xy(GtkSnapshot *snapshot, int width, int height,
+                         GdkRGBA color)
+{
+    for (int i = 0; i < BUFFER_LEN; i++) {
+        float left = buffer_draw[2 * i];
+        float right = buffer_draw[(2 * i) + 1];
+
+        int x = (int)(width / 2) + (left * 300);
+        int y = (int)(height / 2) - (right * 300);
+
+        graphene_rect_t rect;
+        graphene_rect_init(&rect, x, y, 4, 4);
+        gtk_snapshot_append_color(snapshot, &color, &rect);
+    }
+}
+
+static void draw_form_wave(GtkSnapshot *snapshot, int width, int height,
+                           GdkRGBA color)
+{
+    float   mid_y = height / 2.0;
+    float   step_x = (float)width / BUFFER_LEN;
+    Vector2 start_point = {0, mid_y};
+
+    int channel_idx = 0;
+    for (int i = 0; i < BUFFER_LEN; i++) {
+        if (channel_idx) {
+            channel_idx = 0;
+            continue;
+        }
+
+        float           x = i * step_x;
+        float           y = mid_y + (buffer_draw[i] * (height / 4.0));
+        graphene_rect_t rect;
+
+        graphene_rect_init(&rect, x, mid_y, step_x, (y - start_point.y));
+        gtk_snapshot_append_color(snapshot, &color, &rect);
+
+        start_point.x = x;
+        start_point.y = y;
+    }
+}
+
+/* FFTW */
+int has_init = 0;
+int Scale = 10;
+fftwf_complex *fftw_out;
+fftwf_plan     fft_plan;
+static void fft_init()
+{
+    fftw_out = fftwf_alloc_complex(BUFFER_LEN + 1);
+    fft_plan = fftwf_plan_dft_r2c_1d(BUFFER_LEN * 2, buffer_draw, fftw_out, FFTW_ESTIMATE);
+
+    has_init = 1;
+}
+
+void fft_clean()
+{
+    fftwf_destroy_plan(fft_plan);
+    fftwf_free(fftw_out);
+}
+
+static void draw_form_fft(GtkSnapshot *snapshot, int width, int height,
+                           GdkRGBA color)
+{
+    float step_x = (float)width / (BUFFER_LEN / 2 + 1);
+
+    fftwf_execute(fft_plan);
+    for (int i = 0; i < (BUFFER_LEN / 2 + 1); i++) {
+        double fftw_h =
+            sqrt(fftw_out[i][0] * fftw_out[i][0] + (fftw_out[i][1] * fftw_out[i][1])) / (BUFFER_LEN * 2);
+
+        float y = fftw_h * height * Scale;
+        float x = i * step_x;
+
+        graphene_rect_t rect;
+
+        graphene_rect_init(&rect, x, height - y, step_x, y);
+        gtk_snapshot_append_color(snapshot, &color, &rect);
+    }
+}
+
+static void draw_form_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
+{
+    int width = gtk_widget_get_width(widget);
+    int height = gtk_widget_get_height(widget);
+
+    gtk_snapshot_append_color(snapshot, &(GdkRGBA){0, 0, 0, 1.0},
+                              &GRAPHENE_RECT_INIT(0, 0, width, height));
+
+    if (playData->status == PAUSE) {
+        return;
+    }
+
+    GdkRGBA color = {0, 1, 0, 1};
+    switch (playData->draw_mode) {
+    case WAVE: {
+        draw_form_wave(snapshot, width, height, color);
+        break;
+    }
+    case XY: {
+        draw_form_xy(snapshot, width, height, color);
+        break;
+    }
+    case FREQUENCY:
+        if (!has_init) {
+            fft_init();
+        }
+        draw_form_fft(snapshot, width, height, color);
+        break;
+    }
+}
+
+static void draw_form_class_init(DrawFormClass *class)
+{
+    GtkWidgetClass *widget_class = GTK_WIDGET_CLASS(class);
+    widget_class->snapshot = draw_form_snapshot;
+}
+
+gboolean redraw(GtkWidget *widget, GdkFrameClock *frame_clock,
+                gpointer user_data)
+{
+    if (playData->status == PLAYING) {
+        gtk_widget_queue_draw(widget);
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+static void draw_form_init(DrawForm *self)
+{
+    GtkWidget *widget = GTK_WIDGET(self);
+    gtk_widget_set_name(widget, "dramform");
+}
+
+GtkWidget *draw_form_new()
+{
+    GtkWidget *draw_form = g_object_new(draw_form_get_type(), NULL);
+    gtk_widget_set_hexpand(draw_form, TRUE);
+    gtk_widget_set_vexpand(draw_form, TRUE);
+    gtk_widget_add_tick_callback(draw_form, redraw, NULL, NULL);
+    return draw_form;
+}
+
+/* 自定义控件 DrawForm */
 
 static void btn_play_update()
 {
@@ -79,16 +234,6 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x,
                      (gpointer)g_strdup(audio_path));
 
     g_free(filename);
-    return TRUE;
-}
-
-static gboolean gl_draw_audio(GtkGLArea *area, GdkGLContext *context)
-{
-    glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glFlush();
-
     return TRUE;
 }
 
@@ -181,12 +326,9 @@ void draw_ui_main(GtkApplication *app)
     adw_overlay_split_view_set_sidebar(ADW_OVERLAY_SPLIT_VIEW(siderbar_home),
                                        box_sider);
 
-    // OpenGL 音频绘制
-    GtkWidget *gl_area = gtk_gl_area_new();
-    g_signal_connect(gl_area, "render", G_CALLBACK(gl_draw_audio), NULL);
-
+    GtkWidget *draw_form = draw_form_new();
     adw_overlay_split_view_set_content(ADW_OVERLAY_SPLIT_VIEW(siderbar_home),
-                                       gl_area);
+                                       draw_form);
 
     gtk_window_set_child(GTK_WINDOW(window), siderbar_home);
     gtk_window_present(GTK_WINDOW(window));
