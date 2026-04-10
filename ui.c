@@ -3,6 +3,7 @@
 #include <adwaita.h>
 #include <fftw3.h>
 #include <gtk/gtk.h>
+#include <math.h>
 #include <portaudio.h>
 #include <stdio.h>
 
@@ -15,6 +16,8 @@ static int         Width = 1550;
 
 static GtkWidget *Btn_play;
 static GtkWidget *Spin_volume;
+static GdkRGBA    color_draw = {0, 1, 0, 1};
+static GtkWidget *Btn_color_draw;
 
 typedef struct {
     int x;
@@ -28,6 +31,12 @@ typedef struct _DrawForm {
 
 G_DECLARE_FINAL_TYPE(DrawForm, draw_form, DRAWFORM, WIDGET, GtkWidget)
 G_DEFINE_TYPE(DrawForm, draw_form, GTK_TYPE_WIDGET)
+
+static void update_draw_color(GtkWidget *color_button, gpointer *user_data)
+{
+    color_draw = *gtk_color_dialog_button_get_rgba(
+        GTK_COLOR_DIALOG_BUTTON(color_button));
+}
 
 static void draw_form_xy(GtkSnapshot *snapshot, int width, int height,
                          GdkRGBA color)
@@ -48,38 +57,33 @@ static void draw_form_xy(GtkSnapshot *snapshot, int width, int height,
 static void draw_form_wave(GtkSnapshot *snapshot, int width, int height,
                            GdkRGBA color)
 {
-    float   mid_y = height / 2.0;
-    float   step_x = (float)width / BUFFER_LEN;
-    Vector2 start_point = {0, mid_y};
+    float mid_y = height / 2.0;
+    float step_x = (float)width / BUFFER_LEN;
 
-    int channel_idx = 0;
     for (int i = 0; i < BUFFER_LEN; i++) {
-        if (channel_idx) {
-            channel_idx = 0;
+        if ((i % 2) != 0) {
             continue;
         }
 
         float           x = i * step_x;
-        float           y = mid_y + (buffer_draw[i] * (height / 4.0));
+        float           y = mid_y - (buffer_draw[i] * (height / 4.0));
         graphene_rect_t rect;
 
-        graphene_rect_init(&rect, x, mid_y, step_x, (y - start_point.y));
+        graphene_rect_init(&rect, x, fmin(mid_y, y), step_x, fabs(y - mid_y));
         gtk_snapshot_append_color(snapshot, &color, &rect);
-
-        start_point.x = x;
-        start_point.y = y;
     }
 }
 
 /* FFTW */
-int has_init = 0;
-int Scale = 10;
+int            has_init = 0;
+int            Scale = 10;
 fftwf_complex *fftw_out;
 fftwf_plan     fft_plan;
-static void fft_init()
+static void    fft_init()
 {
     fftw_out = fftwf_alloc_complex(BUFFER_LEN + 1);
-    fft_plan = fftwf_plan_dft_r2c_1d(BUFFER_LEN * 2, buffer_draw, fftw_out, FFTW_ESTIMATE);
+    fft_plan = fftwf_plan_dft_r2c_1d(BUFFER_LEN * 2, buffer_draw, fftw_out,
+                                     FFTW_ESTIMATE);
 
     has_init = 1;
 }
@@ -91,14 +95,15 @@ void fft_clean()
 }
 
 static void draw_form_fft(GtkSnapshot *snapshot, int width, int height,
-                           GdkRGBA color)
+                          GdkRGBA color)
 {
-    float step_x = (float)width / (BUFFER_LEN / 2 + 1);
+    float step_x = (float)width / (BUFFER_LEN / 2.0 + 1);
 
     fftwf_execute(fft_plan);
     for (int i = 0; i < (BUFFER_LEN / 2 + 1); i++) {
-        double fftw_h =
-            sqrt(fftw_out[i][0] * fftw_out[i][0] + (fftw_out[i][1] * fftw_out[i][1])) / (BUFFER_LEN * 2);
+        double fftw_h = sqrt(fftw_out[i][0] * fftw_out[i][0] +
+                             (fftw_out[i][1] * fftw_out[i][1])) /
+                        (BUFFER_LEN * 2);
 
         float y = fftw_h * height * Scale;
         float x = i * step_x;
@@ -122,21 +127,20 @@ static void draw_form_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
         return;
     }
 
-    GdkRGBA color = {0, 1, 0, 1};
     switch (playData->draw_mode) {
     case WAVE: {
-        draw_form_wave(snapshot, width, height, color);
+        draw_form_wave(snapshot, width, height, color_draw);
         break;
     }
     case XY: {
-        draw_form_xy(snapshot, width, height, color);
+        draw_form_xy(snapshot, width, height, color_draw);
         break;
     }
     case FREQUENCY:
         if (!has_init) {
             fft_init();
         }
-        draw_form_fft(snapshot, width, height, color);
+        draw_form_fft(snapshot, width, height, color_draw);
         break;
     }
 }
@@ -283,15 +287,28 @@ void draw_ui_main(GtkApplication *app)
     g_signal_connect(Spin_volume, "value-changed", G_CALLBACK(volume_update),
                      NULL);
 
+    GtkColorDialog *color_dialog_draw = gtk_color_dialog_new();
+    Btn_color_draw = gtk_color_dialog_button_new(color_dialog_draw);
+    gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(Btn_color_draw),
+                                     &color_draw);
+
+    g_signal_connect(Btn_color_draw, "notify::rgba",
+                     G_CALLBACK(update_draw_color), NULL);
+
     gtk_box_append(GTK_BOX(box_play_ctl), Btn_play);
     gtk_box_append(GTK_BOX(box_play_ctl), Spin_volume);
+    gtk_box_append(GTK_BOX(box_play_ctl), Btn_color_draw);
     gtk_widget_set_margin_start(box_play_ctl, 10);
+
+    gtk_widget_set_name(box_play_ctl, "box-play-ctl");
 
     // 绘制模式控制
     GtkWidget *box_audio_toggle = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     GtkWidget *toggle_wave = gtk_toggle_button_new_with_label("波形");
     GtkWidget *toggle_frequency = gtk_toggle_button_new_with_label("频谱");
     GtkWidget *toggle_xy = gtk_toggle_button_new_with_mnemonic("XY");
+
+    gtk_widget_set_name(box_audio_toggle, "box-audio-toggle");
 
     gtk_widget_set_hexpand(toggle_wave, TRUE);
     gtk_widget_set_hexpand(toggle_frequency, TRUE);

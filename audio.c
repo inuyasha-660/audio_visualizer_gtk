@@ -43,7 +43,7 @@ int play_callback(const void *input, void *output, unsigned long frameCount,
 
 void audio_clean()
 {
-    Pa_AbortStream(playData->pa_stream);
+    Pa_StopStream(playData->pa_stream);
     sf_close(playData->sndfile);
     Pa_CloseStream(playData->pa_stream);
     playData->frames_played = 0;

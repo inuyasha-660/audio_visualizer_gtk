@@ -24,7 +24,10 @@ int main(int argc, char *argv[])
 
     audio_clean();
     Pa_Terminate();
-    free(playData->audiopath);
+    if (playData->audiopath != NULL) {
+        free(playData->audiopath);
+    }
+    free(playData);
     fft_clean();
 
     return status;
