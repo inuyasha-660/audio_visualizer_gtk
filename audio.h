@@ -18,6 +18,7 @@ typedef enum {
 
 typedef struct {
     int        status;
+    int        xy_reverse; /* 模拟示波器-是否启用反转 */
     DRAW_MODE  draw_mode;
     char       *audiopath;
 

@@ -15,6 +15,7 @@ static int         Height = 950;
 static int         Width = 1550;
 
 static GtkWidget *Btn_play;
+static GtkWidget *Btn_xy_reverse;
 static GtkWidget *Spin_volume;
 static GdkRGBA    color_draw = {0, 1, 0, 1};
 static GtkWidget *Btn_color_draw;
@@ -45,8 +46,14 @@ static void draw_form_xy(GtkSnapshot *snapshot, int width, int height,
         float left = buffer_draw[2 * i];
         float right = buffer_draw[(2 * i) + 1];
 
-        int x = (int)(width / 2) + (left * 300);
-        int y = (int)(height / 2) - (right * 300);
+        int x, y;
+        if (playData->xy_reverse) {
+            x = (int)(width / 2) - (left * 300);
+            y = (int)(height / 2) + (right * 300);
+        } else {
+            x = (int)(width / 2) + (left * 300);
+            y = (int)(height / 2) - (right * 300);
+        }
 
         graphene_rect_t rect;
         graphene_rect_init(&rect, x, y, 4, 4);
@@ -241,9 +248,21 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x,
     return TRUE;
 }
 
+static void update_xy_reverse_mode(GtkWidget *btn, gpointer user_data)
+{
+    playData->xy_reverse = playData->xy_reverse ? 0 : 1;
+}
+
 static void update_draw_mode(GtkWidget *toggle, gpointer user_data)
 {
-    playData->draw_mode = GPOINTER_TO_INT(user_data);
+    DRAW_MODE mode = GPOINTER_TO_INT(user_data);
+    if (mode == XY) {
+        gtk_widget_set_visible(Btn_xy_reverse, TRUE);
+    } else {
+        gtk_widget_set_visible(Btn_xy_reverse, FALSE);
+    }
+
+    playData->draw_mode = mode;
 }
 
 void draw_ui_main(GtkApplication *app)
@@ -295,9 +314,15 @@ void draw_ui_main(GtkApplication *app)
     g_signal_connect(Btn_color_draw, "notify::rgba",
                      G_CALLBACK(update_draw_color), NULL);
 
+    Btn_xy_reverse = gtk_button_new_with_label("反转");
+    gtk_widget_set_visible(Btn_xy_reverse, FALSE);
+    g_signal_connect(Btn_xy_reverse, "clicked",
+                     G_CALLBACK(update_xy_reverse_mode), NULL);
+
     gtk_box_append(GTK_BOX(box_play_ctl), Btn_play);
     gtk_box_append(GTK_BOX(box_play_ctl), Spin_volume);
     gtk_box_append(GTK_BOX(box_play_ctl), Btn_color_draw);
+    gtk_box_append(GTK_BOX(box_play_ctl), Btn_xy_reverse);
     gtk_widget_set_margin_start(box_play_ctl, 10);
 
     gtk_widget_set_name(box_play_ctl, "box-play-ctl");
