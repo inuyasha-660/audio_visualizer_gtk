@@ -2,10 +2,24 @@
 #include "ui.h"
 #include <adwaita.h>
 #include <portaudio.h>
+#include <stdlib.h>
 
 const char *APPLICATION_ID = "net.fsunix.audio-visualizer";
 
 extern PlayData *playData;
+
+void clean_global()
+{
+    if (playData->pa_stream != NULL)
+        audio_clean();
+    Pa_Terminate();
+    for (size_t i = 0; i < playData->MusicCount; i++) {
+        free(playData->MusicList[i]);
+    }
+    free(playData->MusicList);
+    free(playData);
+    fft_clean();
+}
 
 int main(int argc, char *argv[])
 {
@@ -21,13 +35,6 @@ int main(int argc, char *argv[])
 
     status = g_application_run(G_APPLICATION(app), argc, argv);
 
-    audio_clean();
-    Pa_Terminate();
-    if (playData->audiopath != NULL) {
-        free(playData->audiopath);
-    }
-    free(playData);
-    fft_clean();
-
+    clean_global();
     return status;
 }

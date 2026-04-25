@@ -13,6 +13,7 @@ static const char *TITLE_HOME = "Audio Visualizer";
 static int         Height = 1000;
 static int         Width = 1650;
 
+static GtkWidget *Listbox_music;
 static GtkWidget *Btn_play;
 static GtkWidget *Spin_volume;
 static GdkRGBA    color_draw = {0, 1, 0, 1};
@@ -204,9 +205,9 @@ static void audio_status_ctl(GtkWidget *Btn_play, gpointer user_data)
     }
 }
 
-static void start_play(GtkWidget *btn, gpointer user_data)
+static void start_play(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
 {
-    char *audio_path = (char *)user_data;
+    int index = gtk_list_box_row_get_index(row);
 
     if (playData->status == PLAYING) {
         audio_clean();
@@ -215,7 +216,7 @@ static void start_play(GtkWidget *btn, gpointer user_data)
     playData->status = PLAYING;
     btn_play_update();
 
-    playData->audiopath = audio_path;
+    playData->audiopath = playData->MusicList[index];
     audio_play();
 }
 
@@ -228,14 +229,17 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x,
                         double y, gpointer user_data)
 {
     const char *audio_path = g_value_get_string(value);
-    GtkWidget  *box_audiolist = (GtkWidget *)user_data;
+    playData->MusicList = (char **)realloc(
+        playData->MusicList, (playData->MusicCount + 1) * sizeof(char *));
+    playData->MusicList[playData->MusicCount] = strdup(audio_path);
+    ++playData->MusicCount;
 
     gchar *filename = g_path_get_basename(audio_path);
 
-    GtkWidget *btn_audio = gtk_button_new_with_label(filename);
-    gtk_box_append(GTK_BOX(box_audiolist), btn_audio);
-    g_signal_connect(btn_audio, "clicked", G_CALLBACK(start_play),
-                     (gpointer)g_strdup(audio_path));
+    GtkWidget *row_music = adw_action_row_new();
+    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row_music), TRUE);
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_music), filename);
+    gtk_list_box_append(GTK_LIST_BOX(Listbox_music), row_music);
 
     g_free(filename);
     return TRUE;
@@ -263,15 +267,16 @@ void draw_ui_main(GtkApplication *app)
 
     GtkWidget *box_sider = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
 
-    GtkWidget *box_audiolist = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_widget_set_margin_top(box_audiolist, 10);
-    gtk_widget_set_margin_start(box_audiolist, 10);
-    gtk_widget_set_margin_end(box_audiolist, 10);
-
     GtkWidget *scrolled_musiclist = gtk_scrolled_window_new();
-    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_musiclist),
-                                  box_audiolist);
     gtk_widget_set_vexpand(scrolled_musiclist, TRUE);
+
+    // 播放列表
+    Listbox_music = gtk_list_box_new();
+    gtk_widget_add_css_class(Listbox_music, "boxed-list");
+    g_signal_connect(Listbox_music, "row-activated", G_CALLBACK(start_play),
+                     NULL);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_musiclist),
+                                  Listbox_music);
 
     // 允许拖入文件
     GtkDropTarget *drop_target =
@@ -279,7 +284,7 @@ void draw_ui_main(GtkApplication *app)
 
     gtk_widget_add_controller(GTK_WIDGET(scrolled_musiclist),
                               GTK_EVENT_CONTROLLER(drop_target));
-    g_signal_connect(drop_target, "drop", G_CALLBACK(on_drop), box_audiolist);
+    g_signal_connect(drop_target, "drop", G_CALLBACK(on_drop), Listbox_music);
 
     // 音频控制
     GtkWidget *box_play_ctl = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);

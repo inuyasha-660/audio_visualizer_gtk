@@ -20,7 +20,10 @@ typedef struct {
     int        status;
     int        xy_reverse; /* 模拟示波器-是否启用反转 */
     DRAW_MODE  draw_mode;
-    char       *audiopath;
+
+    char      *audiopath;
+    size_t     MusicCount;
+    char     **MusicList;
 
     PaStream   *pa_stream;
     sf_count_t frames_played;

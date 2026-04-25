@@ -77,6 +77,8 @@ int audio_play()
 int audio_init()
 {
     playData = malloc(sizeof(PlayData));
+    playData->MusicCount = 0;
+    playData->MusicList = NULL;
     playData->xy_reverse = 0;
     playData->draw_mode = WAVE;
     playData->status = PAUSE;
