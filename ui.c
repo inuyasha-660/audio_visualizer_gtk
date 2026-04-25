@@ -1,29 +1,21 @@
-#include "ui.h"
 #include "audio.h"
+#include "ui.h"
 #include <adwaita.h>
 #include <fftw3.h>
 #include <gtk/gtk.h>
 #include <math.h>
 #include <portaudio.h>
-#include <stdio.h>
 
 extern PlayData *playData;
 extern float     buffer_draw[BUFFER_LEN * 2];
 
-static const char *TITLE_HOME = "audio_visualizer";
-static int         Height = 950;
-static int         Width = 1550;
+static const char *TITLE_HOME = "Audio Visualizer";
+static int         Height = 1000;
+static int         Width = 1650;
 
 static GtkWidget *Btn_play;
-static GtkWidget *Btn_xy_reverse;
 static GtkWidget *Spin_volume;
 static GdkRGBA    color_draw = {0, 1, 0, 1};
-static GtkWidget *Btn_color_draw;
-
-typedef struct {
-    int x;
-    int y;
-} Vector2;
 
 /* 自定义控件 DrawForm */
 typedef struct _DrawForm {
@@ -180,6 +172,7 @@ GtkWidget *draw_form_new()
     gtk_widget_set_hexpand(draw_form, TRUE);
     gtk_widget_set_vexpand(draw_form, TRUE);
     gtk_widget_add_tick_callback(draw_form, redraw, NULL, NULL);
+
     return draw_form;
 }
 
@@ -256,12 +249,6 @@ static void update_xy_reverse_mode(GtkWidget *btn, gpointer user_data)
 static void update_draw_mode(GtkWidget *toggle, gpointer user_data)
 {
     DRAW_MODE mode = GPOINTER_TO_INT(user_data);
-    if (mode == XY) {
-        gtk_widget_set_visible(Btn_xy_reverse, TRUE);
-    } else {
-        gtk_widget_set_visible(Btn_xy_reverse, FALSE);
-    }
-
     playData->draw_mode = mode;
 }
 
@@ -285,7 +272,6 @@ void draw_ui_main(GtkApplication *app)
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_musiclist),
                                   box_audiolist);
     gtk_widget_set_vexpand(scrolled_musiclist, TRUE);
-    gtk_widget_set_hexpand(scrolled_musiclist, FALSE);
 
     // 允许拖入文件
     GtkDropTarget *drop_target =
@@ -307,23 +293,24 @@ void draw_ui_main(GtkApplication *app)
                      NULL);
 
     GtkColorDialog *color_dialog_draw = gtk_color_dialog_new();
-    Btn_color_draw = gtk_color_dialog_button_new(color_dialog_draw);
-    gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(Btn_color_draw),
+    GtkWidget *btn_color_draw = gtk_color_dialog_button_new(color_dialog_draw);
+    gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(btn_color_draw),
                                      &color_draw);
 
-    g_signal_connect(Btn_color_draw, "notify::rgba",
+    g_signal_connect(btn_color_draw, "notify::rgba",
                      G_CALLBACK(update_draw_color), NULL);
 
-    Btn_xy_reverse = gtk_button_new_with_label("反转");
-    gtk_widget_set_visible(Btn_xy_reverse, FALSE);
-    g_signal_connect(Btn_xy_reverse, "clicked",
+    GtkWidget *btn_xy_reverse = gtk_button_new_with_label("XY反转");
+    gtk_widget_set_hexpand(btn_xy_reverse, TRUE);
+    g_signal_connect(btn_xy_reverse, "clicked",
                      G_CALLBACK(update_xy_reverse_mode), NULL);
 
     gtk_box_append(GTK_BOX(box_play_ctl), Btn_play);
     gtk_box_append(GTK_BOX(box_play_ctl), Spin_volume);
-    gtk_box_append(GTK_BOX(box_play_ctl), Btn_color_draw);
-    gtk_box_append(GTK_BOX(box_play_ctl), Btn_xy_reverse);
+    gtk_box_append(GTK_BOX(box_play_ctl), btn_color_draw);
+    gtk_box_append(GTK_BOX(box_play_ctl), btn_xy_reverse);
     gtk_widget_set_margin_start(box_play_ctl, 10);
+    gtk_widget_set_margin_end(box_play_ctl, 10);
 
     gtk_widget_set_name(box_play_ctl, "box-play-ctl");
 
@@ -331,7 +318,7 @@ void draw_ui_main(GtkApplication *app)
     GtkWidget *box_audio_toggle = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     GtkWidget *toggle_wave = gtk_toggle_button_new_with_label("波形");
     GtkWidget *toggle_frequency = gtk_toggle_button_new_with_label("频谱");
-    GtkWidget *toggle_xy = gtk_toggle_button_new_with_mnemonic("XY");
+    GtkWidget *toggle_xy = gtk_toggle_button_new_with_mnemonic("X-Y");
 
     gtk_widget_set_name(box_audio_toggle, "box-audio-toggle");
 

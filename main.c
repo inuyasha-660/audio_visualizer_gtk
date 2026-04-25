@@ -3,7 +3,6 @@
 #include <adwaita.h>
 #include <portaudio.h>
 
-const char *APPLICATION_NAME = "audio_visualizer";
 const char *APPLICATION_ID = "net.fsunix.audio-visualizer";
 
 extern PlayData *playData;
