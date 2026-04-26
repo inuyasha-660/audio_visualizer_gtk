@@ -8,6 +8,7 @@
 typedef enum {
     PLAYING = 1,
     PAUSE = 0,
+    END = 2, /* 表示播放完毕 */
 } PLAYSTATUS;
 
 typedef enum {

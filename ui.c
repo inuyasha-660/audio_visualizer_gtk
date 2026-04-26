@@ -32,6 +32,15 @@ static void update_draw_color(GtkWidget *color_button, gpointer *user_data)
         GTK_COLOR_DIALOG_BUTTON(color_button));
 }
 
+static void btn_play_update()
+{
+    if (playData->status == PLAYING) {
+        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-pause");
+    } else {
+        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-start");
+    }
+}
+
 static void draw_form_xy(GtkSnapshot *snapshot, int width, int height,
                          GdkRGBA color)
 {
@@ -157,6 +166,9 @@ gboolean redraw(GtkWidget *widget, GdkFrameClock *frame_clock,
     if (playData->status == PLAYING) {
         gtk_widget_queue_draw(widget);
     }
+    if (playData->status == END) {
+        btn_play_update();
+    }
 
     return G_SOURCE_CONTINUE;
 }
@@ -179,32 +191,6 @@ GtkWidget *draw_form_new()
 
 /* 自定义控件 DrawForm */
 
-static void btn_play_update()
-{
-    if (playData->status == PLAYING) {
-        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-pause");
-    } else {
-        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-start");
-    }
-}
-
-static void audio_status_ctl(GtkWidget *Btn_play, gpointer user_data)
-{
-    if (playData->audiopath == NULL)
-        return;
-
-    if (playData->status == PLAYING) {
-        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-start");
-        Pa_AbortStream(playData->pa_stream);
-        playData->status = PAUSE;
-
-    } else {
-        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-pause");
-        Pa_StartStream(playData->pa_stream);
-        playData->status = PLAYING;
-    }
-}
-
 static void start_play(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
 {
     int index = gtk_list_box_row_get_index(row);
@@ -220,6 +206,29 @@ static void start_play(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
     audio_play();
 }
 
+static void audio_status_ctl(GtkWidget *Btn_play, gpointer user_data)
+{
+    if (playData->audiopath == NULL)
+        return;
+
+    if (playData->status == PLAYING) {
+        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-start");
+        Pa_AbortStream(playData->pa_stream);
+        playData->status = PAUSE;
+
+    } else if (playData->status == PAUSE) {
+        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-pause");
+        Pa_StartStream(playData->pa_stream);
+        playData->status = PLAYING;
+
+    } else {
+        gtk_button_set_icon_name(GTK_BUTTON(Btn_play), "media-playback-pause");
+        playData->status = PLAYING;
+        audio_clean();
+        audio_play();
+    }
+}
+
 static void volume_update(GtkWidget *spin)
 {
     playData->volume = gtk_spin_button_get_value(GTK_SPIN_BUTTON(Spin_volume));
@@ -228,20 +237,28 @@ static void volume_update(GtkWidget *spin)
 static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x,
                         double y, gpointer user_data)
 {
-    const char *audio_path = g_value_get_string(value);
-    playData->MusicList = (char **)realloc(
-        playData->MusicList, (playData->MusicCount + 1) * sizeof(char *));
-    playData->MusicList[playData->MusicCount] = strdup(audio_path);
-    ++playData->MusicCount;
+    GdkFileList *file_list = g_value_get_boxed(value);
+    GSList      *list = gdk_file_list_get_files(file_list);
 
-    gchar *filename = g_path_get_basename(audio_path);
+    for (GSList *l = list; l != NULL; l = l->next) {
+        GFile *file = l->data;
+        char  *audio_path = g_file_get_path(file);
+        gchar *filename = g_path_get_basename(audio_path);
 
-    GtkWidget *row_music = adw_action_row_new();
-    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row_music), TRUE);
-    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_music), filename);
-    gtk_list_box_append(GTK_LIST_BOX(Listbox_music), row_music);
+        playData->MusicList = (char **)realloc(
+            playData->MusicList, (playData->MusicCount + 1) * sizeof(char *));
+        playData->MusicList[playData->MusicCount] = strdup(audio_path);
+        ++playData->MusicCount;
 
-    g_free(filename);
+        GtkWidget *row_music = adw_action_row_new();
+        gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row_music), TRUE);
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_music), filename);
+        gtk_list_box_append(GTK_LIST_BOX(Listbox_music), row_music);
+
+        free(audio_path);
+        free(filename);
+    }
+
     return TRUE;
 }
 
@@ -280,7 +297,12 @@ void draw_ui_main(GtkApplication *app)
 
     // 允许拖入文件
     GtkDropTarget *drop_target =
-        gtk_drop_target_new(G_TYPE_STRING, GDK_ACTION_COPY);
+        gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);
+    gtk_drop_target_set_gtypes(drop_target,
+                               (GType[1]){
+                                   GDK_TYPE_FILE_LIST,
+                               },
+                               1);
 
     gtk_widget_add_controller(GTK_WIDGET(scrolled_musiclist),
                               GTK_EVENT_CONTROLLER(drop_target));

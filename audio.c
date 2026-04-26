@@ -2,8 +2,6 @@
 #include "ui.h"
 #include <portaudio.h>
 #include <sndfile.h>
-#include <stdio.h>
-#include <string.h>
 
 float buffer_draw[BUFFER_LEN * 2];
 
@@ -19,7 +17,7 @@ int play_callback(const void *input, void *output, unsigned long frameCount,
 
     read_count = sf_readf_float(playData->sndfile, out, frameCount);
     if (read_count < frameCount) {
-        playData->status = PAUSE;
+        playData->status = END;
 
         int rest = (frameCount - read_count) * playData->sf_info.channels;
         for (int i = 0; i < rest; i++) {
