@@ -1,10 +1,12 @@
 #include "audio.h"
+#include "glib.h"
 #include "ui.h"
 #include <adwaita.h>
 #include <fftw3.h>
 #include <gtk/gtk.h>
 #include <math.h>
 #include <portaudio.h>
+#include <stdlib.h>
 
 extern PlayData *playData;
 extern float     buffer_draw[BUFFER_LEN * 2];
@@ -276,6 +278,12 @@ static void update_draw_mode(GtkWidget *toggle, gpointer user_data)
 void draw_ui_main(GtkApplication *app)
 {
     GtkWidget *window = gtk_application_window_new(app);
+
+    // 音频初始化
+    if (audio_init() < 0) {
+        g_error("Failed to initialize audio");
+        exit(1);
+    }
 
     gtk_window_set_title(GTK_WINDOW(window), TITLE_HOME);
     gtk_window_set_default_size(GTK_WINDOW(window), Width, Height);

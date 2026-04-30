@@ -77,11 +77,13 @@ int audio_init()
     playData = malloc(sizeof(PlayData));
     playData->MusicCount = 0;
     playData->MusicList = NULL;
+    playData->audiopath = NULL;
     playData->xy_reverse = 0;
     playData->draw_mode = WAVE;
-    playData->status = PAUSE;
+    playData->status = INITIAL;
     playData->frames_played = 0;
     playData->volume = DEFAULT_VOL;
+    playData->pa_stream = NULL;
 
     PaError pa_err;
 

@@ -14,7 +14,7 @@ dep = [
   dependency('libmpg123'),
   dependency('vorbis'),
   dependency('vorbisenc'),
-  cc.find_library('mp3lame')
+  cc.find_library('mp3lame'),
   ]
 
 src = files(

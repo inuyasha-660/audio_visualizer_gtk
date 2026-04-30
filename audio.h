@@ -6,9 +6,10 @@
 #define DEFAULT_VOL 35.0f
 
 typedef enum {
-    PLAYING = 1,
     PAUSE = 0,
-    END = 2, /* 表示播放完毕 */
+    PLAYING = 1,
+    INITIAL = 3, /* 未填入音频 */
+    END = 2, /* 播放完毕 */
 } PLAYSTATUS;
 
 typedef enum {
