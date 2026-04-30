@@ -1,5 +1,4 @@
 #include "audio.h"
-#include "glib.h"
 #include "ui.h"
 #include <adwaita.h>
 #include <fftw3.h>
@@ -12,8 +11,8 @@ extern PlayData *playData;
 extern float     buffer_draw[BUFFER_LEN * 2];
 
 static const char *TITLE_HOME = "Audio Visualizer";
-static int         Height = 1000;
-static int         Width = 1650;
+static int         Height = 1050;
+static int         Width = 1850;
 
 static GtkWidget *Listbox_music;
 static GtkWidget *Btn_play;
@@ -292,11 +291,24 @@ void draw_ui_main(GtkApplication *app)
 
     GtkWidget *box_sider = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
 
+    GtkWidget *group_pw = adw_preferences_group_new();
+    GtkWidget *btn_refresh = gtk_button_new_from_icon_name("view-refresh");
+    gtk_widget_set_size_request(group_pw, -1, Height / 4);
+    adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group_pw),
+                                    "PipeWire");
+    adw_preferences_group_set_header_suffix(ADW_PREFERENCES_GROUP(group_pw),
+                                            btn_refresh);
+    gtk_widget_set_margin_top(group_pw, 10);
+    gtk_widget_set_margin_start(group_pw, 10);
+    gtk_widget_set_margin_end(group_pw, 10);
+
     GtkWidget *scrolled_musiclist = gtk_scrolled_window_new();
     gtk_widget_set_vexpand(scrolled_musiclist, TRUE);
 
     // 播放列表
     Listbox_music = gtk_list_box_new();
+    GtkWidget *label_drop_file = gtk_label_new("拖入音频文件");
+    gtk_list_box_set_placeholder(GTK_LIST_BOX(Listbox_music), label_drop_file);
     gtk_widget_add_css_class(Listbox_music, "boxed-list");
     g_signal_connect(Listbox_music, "row-activated", G_CALLBACK(start_play),
                      NULL);
@@ -347,8 +359,6 @@ void draw_ui_main(GtkApplication *app)
     gtk_widget_set_margin_start(box_play_ctl, 10);
     gtk_widget_set_margin_end(box_play_ctl, 10);
 
-    gtk_widget_set_name(box_play_ctl, "box-play-ctl");
-
     // 绘制模式控制
     GtkWidget *box_audio_toggle = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     GtkWidget *toggle_wave = gtk_toggle_button_new_with_label("波形");
@@ -383,6 +393,7 @@ void draw_ui_main(GtkApplication *app)
     gtk_box_append(GTK_BOX(box_audio_toggle), toggle_xy);
 
     // 为 SiderBar 添加部件
+    gtk_box_append(GTK_BOX(box_sider), group_pw);
     gtk_box_append(GTK_BOX(box_sider), scrolled_musiclist);
     gtk_box_append(GTK_BOX(box_sider), box_play_ctl);
     gtk_box_append(GTK_BOX(box_sider), box_audio_toggle);

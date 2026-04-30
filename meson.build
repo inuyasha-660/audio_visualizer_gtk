@@ -14,6 +14,7 @@ dep = [
   dependency('libmpg123'),
   dependency('vorbis'),
   dependency('vorbisenc'),
+  dependency('libpipewire-0.3'),
   cc.find_library('mp3lame'),
   ]
 

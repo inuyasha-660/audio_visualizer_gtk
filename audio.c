@@ -1,5 +1,6 @@
 #include "audio.h"
 #include "ui.h"
+#include <pipewire/pipewire.h>
 #include <portaudio.h>
 #include <sndfile.h>
 
