@@ -1,11 +1,6 @@
 # Audio Visualizer
 GTK4 实现的简单音频可视化工具
 
-## 预览
-| 波形| 频谱| 模拟示波器|
-| --- | ----| ------|
-| ![wave](./resources/wave.png) | ![fft](./resources/fft.png) | ![xy](./resources/xy.png) |
-
 ## 支持的音频格式
 [libsndfile: Supported formats](https://libsndfile.github.io/libsndfile/formats.html)
 
