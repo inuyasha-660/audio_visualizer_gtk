@@ -8,12 +8,14 @@
 #include <stdlib.h>
 
 extern PlayData *playData;
+extern PWData   *pwData;
 extern float     buffer_draw[BUFFER_LEN * 2];
 
 static const char *TITLE_HOME = "Audio Visualizer";
 static int         Height = 1050;
 static int         Width = 1850;
 
+GtkWidget        *Group_pw;
 static GtkWidget *Listbox_music;
 static GtkWidget *Btn_play;
 static GtkWidget *Spin_volume;
@@ -274,6 +276,26 @@ static void update_draw_mode(GtkWidget *toggle, gpointer user_data)
     playData->draw_mode = mode;
 }
 
+gboolean ui_update_pw_node(gpointer user_data)
+{
+    PWUpdateCtx *update_ctx = (PWUpdateCtx *)user_data;
+
+    switch (update_ctx->operate) {
+    case ADD: {
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(Group_pw),
+                                  update_ctx->row_node);
+        break;
+    }
+    case REMOVE: {
+        adw_preferences_group_remove(ADW_PREFERENCES_GROUP(Group_pw),
+                                     update_ctx->row_node);
+        break;
+    }
+    }
+
+    return G_SOURCE_REMOVE;
+}
+
 void draw_ui_main(GtkApplication *app)
 {
     GtkWidget *window = gtk_application_window_new(app);
@@ -283,6 +305,7 @@ void draw_ui_main(GtkApplication *app)
         g_error("Failed to initialize audio");
         exit(1);
     }
+    g_idle_add(pw_setup, NULL);
 
     gtk_window_set_title(GTK_WINDOW(window), TITLE_HOME);
     gtk_window_set_default_size(GTK_WINDOW(window), Width, Height);
@@ -291,16 +314,18 @@ void draw_ui_main(GtkApplication *app)
 
     GtkWidget *box_sider = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
 
-    GtkWidget *group_pw = adw_preferences_group_new();
-    GtkWidget *btn_refresh = gtk_button_new_from_icon_name("view-refresh");
-    gtk_widget_set_size_request(group_pw, -1, Height / 4);
-    adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group_pw),
-                                    "PipeWire");
-    adw_preferences_group_set_header_suffix(ADW_PREFERENCES_GROUP(group_pw),
-                                            btn_refresh);
-    gtk_widget_set_margin_top(group_pw, 10);
-    gtk_widget_set_margin_start(group_pw, 10);
-    gtk_widget_set_margin_end(group_pw, 10);
+    GtkWidget *scrolled_pw = gtk_scrolled_window_new();
+    gtk_widget_set_size_request(scrolled_pw, -1, Height / 4);
+
+    Group_pw = adw_preferences_group_new();
+    adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(Group_pw),
+                                    "PipeWire Node");
+
+    gtk_widget_set_margin_top(Group_pw, 10);
+    gtk_widget_set_margin_start(Group_pw, 10);
+    gtk_widget_set_margin_end(Group_pw, 10);
+
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_pw), Group_pw);
 
     GtkWidget *scrolled_musiclist = gtk_scrolled_window_new();
     gtk_widget_set_vexpand(scrolled_musiclist, TRUE);
@@ -393,7 +418,7 @@ void draw_ui_main(GtkApplication *app)
     gtk_box_append(GTK_BOX(box_audio_toggle), toggle_xy);
 
     // 为 SiderBar 添加部件
-    gtk_box_append(GTK_BOX(box_sider), group_pw);
+    gtk_box_append(GTK_BOX(box_sider), scrolled_pw);
     gtk_box_append(GTK_BOX(box_sider), scrolled_musiclist);
     gtk_box_append(GTK_BOX(box_sider), box_play_ctl);
     gtk_box_append(GTK_BOX(box_sider), box_audio_toggle);

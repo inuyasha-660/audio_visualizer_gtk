@@ -1,12 +1,15 @@
 #include "audio.h"
 #include "ui.h"
+#include <adwaita.h>
 #include <pipewire/pipewire.h>
 #include <portaudio.h>
 #include <sndfile.h>
+#include <stdlib.h>
 
 float buffer_draw[BUFFER_LEN * 2];
 
 PlayData *playData = {0};
+PWData   *pwData = {0};
 
 int play_callback(const void *input, void *output, unsigned long frameCount,
                   const PaStreamCallbackTimeInfo *timeInfo,
@@ -97,4 +100,103 @@ int audio_init()
     }
 
     return 0;
+}
+
+static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
+                                  const char *type, uint32_t version,
+                                  const struct spa_dict *props)
+{
+    if (props == NULL || props->n_items == 0) {
+        return;
+    }
+
+    const struct spa_dict_item *item;
+    spa_dict_for_each(item, props)
+    {
+        if (strcmp(item->key, "node.name"))
+            continue;
+
+        GtkWidget *row_node = adw_action_row_new();
+        gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row_node), TRUE);
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_node),
+                                      item->value);
+
+        g_hash_table_insert(pwData->table_node_row, GINT_TO_POINTER(id),
+                            row_node);
+
+        PWUpdateCtx *update_ctx = malloc(sizeof(PWUpdateCtx));
+        update_ctx->operate = ADD;
+        update_ctx->row_node = row_node;
+
+        g_idle_add(ui_update_pw_node, update_ctx);
+    }
+}
+
+static void registry_event_global_remove(void *data, uint32_t id)
+{
+    GtkWidget *row_node =
+        g_hash_table_lookup(pwData->table_node_row, GINT_TO_POINTER(id));
+
+    if (row_node != NULL) {
+        PWUpdateCtx *update_ctx = malloc(sizeof(PWUpdateCtx));
+        update_ctx->operate = REMOVE;
+        update_ctx->row_node = row_node;
+        g_idle_add(ui_update_pw_node, update_ctx);
+
+        g_hash_table_remove(pwData->table_node_row, GINT_TO_POINTER(id));
+    }
+}
+
+static const struct pw_registry_events registry_events = {
+    PW_VERSION_REGISTRY_EVENTS,
+    .global = registry_event_global,
+    .global_remove = registry_event_global_remove,
+};
+
+gboolean pw_setup(gpointer user_data)
+{
+    int    argc = 0;
+    char **argv = NULL;
+    pw_init(&argc, &argv);
+
+    pwData = malloc(sizeof(PWData));
+    pwData->table_node_row = g_hash_table_new(g_direct_hash, g_direct_equal);
+    pwData->context = NULL;
+    pwData->core = NULL;
+    pwData->loop = NULL;
+    pwData->registry = NULL;
+
+    pwData->loop = pw_thread_loop_new("pw-server", NULL);
+    if (pwData->loop == NULL) {
+        g_warning("Failed to create main loop of PipeWire");
+        return G_SOURCE_REMOVE;
+    }
+
+    pwData->context =
+        pw_context_new(pw_thread_loop_get_loop(pwData->loop), NULL, 0);
+    if (pwData->context == NULL) {
+        g_warning("Failed to create context\n");
+        return G_SOURCE_REMOVE;
+    }
+
+    pwData->core = pw_context_connect(pwData->context, NULL, 0);
+    if (pwData->core == NULL) {
+        g_warning("Failed to connect to context\n");
+        return G_SOURCE_REMOVE;
+    }
+
+    pwData->registry =
+        pw_core_get_registry(pwData->core, PW_VERSION_REGISTRY, 0);
+    if (pwData->registry == NULL) {
+        g_warning("Failed to connect to context\n");
+        return G_SOURCE_REMOVE;
+    }
+
+    spa_zero(pwData->registry_listener);
+    pw_registry_add_listener(pwData->registry, &pwData->registry_listener,
+                             &registry_events, NULL);
+
+    pw_thread_loop_start(pwData->loop);
+
+    return G_SOURCE_REMOVE;
 }

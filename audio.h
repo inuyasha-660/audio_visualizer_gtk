@@ -1,5 +1,9 @@
+#include "glib.h"
+#include "pipewire/thread-loop.h"
 #include <sndfile.h>
 #include <portaudio.h>
+#include <gtk/gtk.h>
+#include <pipewire/pipewire.h>
 
 #define BUFFER_LEN 1024
 
@@ -34,6 +38,17 @@ typedef struct {
     float      volume;
 } PlayData;
 
+typedef struct {
+    GHashTable *table_node_row;
+
+    struct pw_thread_loop *loop;
+    struct pw_context *context;
+    struct pw_core *core;
+    struct pw_registry *registry;
+    struct spa_hook registry_listener;
+} PWData;
+
 int audio_init();
 int audio_play();
 void audio_clean();
+gboolean pw_setup(gpointer user_data);
