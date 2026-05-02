@@ -202,6 +202,11 @@ static void start_play(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
     if (playData->status == PLAYING && playData->mode == 0) {
         audio_clean();
     }
+    if (playData->mode == 1) {
+        do_quit();
+    }
+
+    memset(buffer_draw, 0, sizeof(buffer_draw));
 
     playData->status = PLAYING;
     btn_play_update();

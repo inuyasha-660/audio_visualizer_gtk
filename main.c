@@ -11,8 +11,7 @@ extern PWData   *pwData;
 
 void clean_global()
 {
-    if (playData->pa_stream != NULL)
-        audio_clean();
+    audio_clean();
     Pa_Terminate();
     for (size_t i = 0; i < playData->MusicCount; i++) {
         free(playData->MusicList[i]);

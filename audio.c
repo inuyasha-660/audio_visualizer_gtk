@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "pipewire/stream.h"
 #include "ui.h"
 #include <adwaita.h>
 #include <pipewire/pipewire.h>
@@ -47,7 +48,8 @@ int play_callback(const void *input, void *output, unsigned long frameCount,
 
 void audio_clean()
 {
-    Pa_StopStream(playData->pa_stream);
+    if (playData->pa_stream != NULL)
+        Pa_StopStream(playData->pa_stream);
     if (playData->sndfile != NULL)
         sf_close(playData->sndfile);
     if (playData->pa_stream != NULL)
@@ -210,9 +212,14 @@ static void on_stream_param_changed(void *_data, uint32_t id,
 
 void do_quit()
 {
-    pw_thread_loop_stop(pwData->loop);
-    pw_stream_destroy(pwData->stream);
+    pw_thread_loop_lock(pwData->loop);
+
+    if (pwData->stream != NULL)
+        pw_stream_destroy(pwData->stream);
+    pwData->stream = NULL;
+
     playData->mode = 0;
+    pw_thread_loop_unlock(pwData->loop);
 }
 
 static const struct pw_stream_events stream_events = {
