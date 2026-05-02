@@ -1,4 +1,7 @@
-project('audio_visualizer_gtk', 'c')
+project('audio_visualizer_gtk', 'c',
+    default_options: [ 
+        'buildtype=release'
+  ],)
 
 cc = meson.get_compiler('c')
 
