@@ -52,8 +52,6 @@ void audio_clean()
         Pa_StopStream(playData->pa_stream);
     if (playData->sndfile != NULL)
         sf_close(playData->sndfile);
-    if (playData->pa_stream != NULL)
-        Pa_CloseStream(playData->pa_stream);
     playData->frames_played = 0;
 }
 
@@ -94,6 +92,7 @@ int audio_init()
     playData->status = INITIAL;
     playData->frames_played = 0;
     playData->volume = DEFAULT_VOL;
+    playData->sndfile = NULL;
     playData->pa_stream = NULL;
 
     PaError pa_err;
