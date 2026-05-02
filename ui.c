@@ -6,6 +6,7 @@
 #include <math.h>
 #include <portaudio.h>
 #include <stdlib.h>
+#include <string.h>
 
 extern PlayData *playData;
 extern PWData   *pwData;
@@ -198,7 +199,7 @@ static void start_play(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
 {
     int index = gtk_list_box_row_get_index(row);
 
-    if (playData->status == PLAYING) {
+    if (playData->status == PLAYING && playData->mode == 0) {
         audio_clean();
     }
 
@@ -294,6 +295,23 @@ gboolean ui_update_pw_node(gpointer user_data)
     }
 
     return G_SOURCE_REMOVE;
+}
+
+void pw_draw(GtkWidget *row_node, gpointer user_data)
+{
+    const char *node_name =
+        adw_preferences_row_get_title(ADW_PREFERENCES_ROW(row_node));
+    if (playData->status != INITIAL) {
+        audio_clean();
+    }
+    playData->status = PLAYING;
+    playData->mode = 1;
+
+    btn_play_update();
+    gtk_list_box_unselect_all(GTK_LIST_BOX(Listbox_music));
+
+    memset(buffer_draw, 0, sizeof(buffer_draw));
+    start_record(node_name);
 }
 
 void draw_ui_main(GtkApplication *app)

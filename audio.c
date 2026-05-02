@@ -4,9 +4,11 @@
 #include <pipewire/pipewire.h>
 #include <portaudio.h>
 #include <sndfile.h>
+#include <spa/param/audio/format-utils.h>
 #include <stdlib.h>
 
 float buffer_draw[BUFFER_LEN * 2];
+float buffer[BUFFER_LEN];
 
 PlayData *playData = {0};
 PWData   *pwData = {0};
@@ -46,8 +48,10 @@ int play_callback(const void *input, void *output, unsigned long frameCount,
 void audio_clean()
 {
     Pa_StopStream(playData->pa_stream);
-    sf_close(playData->sndfile);
-    Pa_CloseStream(playData->pa_stream);
+    if (playData->sndfile != NULL)
+        sf_close(playData->sndfile);
+    if (playData->pa_stream != NULL)
+        Pa_CloseStream(playData->pa_stream);
     playData->frames_played = 0;
 }
 
@@ -79,6 +83,7 @@ int audio_play()
 int audio_init()
 {
     playData = malloc(sizeof(PlayData));
+    playData->mode = 0;
     playData->MusicCount = 0;
     playData->MusicList = NULL;
     playData->audiopath = NULL;
@@ -120,6 +125,7 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
         gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row_node), TRUE);
         adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_node),
                                       item->value);
+        g_signal_connect(row_node, "activated", G_CALLBACK(pw_draw), NULL);
 
         g_hash_table_insert(pwData->table_node_row, GINT_TO_POINTER(id),
                             row_node);
@@ -147,11 +153,121 @@ static void registry_event_global_remove(void *data, uint32_t id)
     }
 }
 
+static void on_process(void *userdata)
+{
+    struct pw_buffer  *pw_buffer;
+    struct spa_buffer *spa_buffer;
+    float             *samples;
+    uint32_t           num_channels, num_samples;
+
+    if ((pw_buffer = pw_stream_dequeue_buffer(pwData->stream)) == NULL) {
+        pw_log_warn("out of buffers: %m");
+        return;
+    }
+
+    spa_buffer = pw_buffer->buffer;
+    if ((samples = spa_buffer->datas[0].data) == NULL)
+        return;
+
+    num_channels = pwData->format.info.raw.channels;
+    if (num_channels != 2) {
+        pw_log_error("Expect 2 channels but get %d", num_channels);
+        goto end;
+    }
+
+    num_samples = spa_buffer->datas[0].chunk->size / sizeof(float);
+
+    for (uint32_t i = 0; i < num_samples; i++) {
+        samples[i] *= 2.0;
+    }
+
+    if (num_samples > BUFFER_LEN * 2) {
+        memcpy(buffer_draw, samples, sizeof(buffer_draw));
+    } else {
+        memcpy(buffer_draw, samples, num_samples * sizeof(float));
+    }
+
+end:
+    pw_stream_queue_buffer(pwData->stream, pw_buffer);
+}
+
+static void on_stream_param_changed(void *_data, uint32_t id,
+                                    const struct spa_pod *param)
+{
+    if (param == NULL || id != SPA_PARAM_Format)
+        return;
+
+    if (spa_format_parse(param, &pwData->format.media_type,
+                         &pwData->format.media_subtype) < 0)
+        return;
+
+    if (pwData->format.media_type != SPA_MEDIA_TYPE_audio ||
+        pwData->format.media_subtype != SPA_MEDIA_SUBTYPE_raw)
+        return;
+
+    spa_format_audio_raw_parse(param, &pwData->format.info.raw);
+}
+
+void do_quit()
+{
+    pw_thread_loop_stop(pwData->loop);
+    pw_stream_destroy(pwData->stream);
+    playData->mode = 0;
+}
+
+static const struct pw_stream_events stream_events = {
+    PW_VERSION_STREAM_EVENTS,
+    .param_changed = on_stream_param_changed,
+    .process = on_process,
+};
+
 static const struct pw_registry_events registry_events = {
     PW_VERSION_REGISTRY_EVENTS,
     .global = registry_event_global,
     .global_remove = registry_event_global_remove,
 };
+
+void start_record(const char *node_name)
+{
+    pw_thread_loop_lock(pwData->loop);
+
+    struct pw_properties *props;
+    props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY,
+                              "Capture", PW_KEY_MEDIA_ROLE, "Music", NULL);
+    if (props == NULL) {
+        g_warning("Failed to create a new properties\n");
+        pw_thread_loop_unlock(pwData->loop);
+        return;
+    }
+    pw_properties_set(props, PW_KEY_TARGET_OBJECT, node_name);
+
+    if (pwData->stream != NULL) {
+        pw_stream_destroy(pwData->stream);
+        pwData->stream = NULL;
+    }
+
+    pwData->stream =
+        pw_stream_new_simple(pw_thread_loop_get_loop(pwData->loop),
+                             "audio-capture", props, &stream_events, NULL);
+    if (pwData->stream == NULL) {
+        g_warning("Failed to create a new stream\n");
+        pw_thread_loop_unlock(pwData->loop);
+        return;
+    }
+
+    pwData->n_params = 0;
+    pwData->builder = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+    pwData->params[pwData->n_params++] = spa_format_audio_raw_build(
+        &pwData->builder, SPA_PARAM_EnumFormat,
+        &SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32));
+
+    pw_stream_connect(pwData->stream, PW_DIRECTION_INPUT, PW_ID_ANY,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
+                          PW_STREAM_FLAG_RT_PROCESS,
+                      pwData->params, pwData->n_params);
+
+    pw_thread_loop_unlock(pwData->loop);
+}
 
 gboolean pw_setup(gpointer user_data)
 {
@@ -161,6 +277,8 @@ gboolean pw_setup(gpointer user_data)
 
     pwData = malloc(sizeof(PWData));
     pwData->table_node_row = g_hash_table_new(g_direct_hash, g_direct_equal);
+    pwData->n_params = 0;
+    pwData->stream = NULL;
     pwData->context = NULL;
     pwData->core = NULL;
     pwData->loop = NULL;
@@ -168,7 +286,7 @@ gboolean pw_setup(gpointer user_data)
 
     pwData->loop = pw_thread_loop_new("pw-server", NULL);
     if (pwData->loop == NULL) {
-        g_warning("Failed to create main loop of PipeWire");
+        g_warning("Failed to create thread loop of PipeWire");
         return G_SOURCE_REMOVE;
     }
 

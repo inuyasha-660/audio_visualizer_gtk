@@ -28,6 +28,8 @@ void clean_global()
         pw_core_disconnect(pwData->core);
     if (pwData->context != NULL)
         pw_context_destroy(pwData->context);
+    if (pwData->stream != NULL)
+        pw_stream_destroy(pwData->stream);
 
     pw_thread_loop_destroy(pwData->loop);
 

@@ -13,3 +13,4 @@ typedef struct {
 void draw_ui_main(GtkApplication *app);
 void fft_clean();
 gboolean ui_update_pw_node(gpointer user_data);
+void pw_draw(GtkWidget *row_node, gpointer user_data);

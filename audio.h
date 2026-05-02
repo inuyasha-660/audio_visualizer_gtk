@@ -1,9 +1,8 @@
-#include "glib.h"
-#include "pipewire/thread-loop.h"
 #include <sndfile.h>
 #include <portaudio.h>
 #include <gtk/gtk.h>
 #include <pipewire/pipewire.h>
+#include <spa/param/audio/format-utils.h>
 
 #define BUFFER_LEN 1024
 
@@ -23,6 +22,7 @@ typedef enum {
 } DRAW_MODE;
 
 typedef struct {
+    int        mode; /* 0: 音频文件 1: PipeWire Node */
     int        status;
     int        xy_reverse; /* 模拟示波器-是否启用反转 */
     DRAW_MODE  draw_mode;
@@ -41,6 +41,12 @@ typedef struct {
 typedef struct {
     GHashTable *table_node_row;
 
+    struct spa_audio_info format;
+    struct pw_stream *stream;
+    const struct spa_pod  *params[1];
+    uint32_t               n_params;
+    struct spa_pod_builder builder;
+
     struct pw_thread_loop *loop;
     struct pw_context *context;
     struct pw_core *core;
@@ -52,3 +58,5 @@ int audio_init();
 int audio_play();
 void audio_clean();
 gboolean pw_setup(gpointer user_data);
+void do_quit();
+void start_record(const char *node_name);
